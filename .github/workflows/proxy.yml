@@ -1,24 +1,60 @@
-    - name: Filter proxies that open Telegram
-      run: |
-        python3 - << 'EOF'
-        import requests
+name: Proxy Collector
 
-        good_proxies = []
-        with open("sub.txt", "r", encoding="utf-8") as f:
-            proxies = [line.strip() for line in f if line.strip()]
+on:
+  schedule:
+    - cron: "0 */6 * * *"   # هر 6 ساعت یکبار اجرا میشه
+  workflow_dispatch:        # اجرای دستی
 
-        for proxy in proxies:
-            try:
-                r = requests.get(
-                    "https://web.telegram.org/k/",
-                    proxies={"http": proxy, "https": proxy},
-                    timeout=5
-                )
-                if r.status_code == 200:
-                    good_proxies.append(proxy)
-            except:
-                continue
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-        with open("sub.txt", "w", encoding="utf-8") as f:
-            f.write("\n".join(good_proxies))
-        EOF
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Collect proxies
+        run: |
+          import requests, re
+
+          urls = [
+              "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/sub/sub_merge.txt",
+              "https://raw.githubusercontent.com/peasoft/NoMoreWalls/master/list.txt"
+          ]
+
+          proxies = []
+          for url in urls:
+              try:
+                  r = requests.get(url, timeout=10)
+                  for line in r.text.splitlines():
+                      if line.strip() and (line.startswith("vmess://") or line.startswith("vless://") or line.startswith("trojan://")):
+                          proxies.append(line.strip())
+              except:
+                  pass
+
+          # ذخیره فقط پروکسی‌های سالم
+          open("sub.txt", "w").write("\n".join(proxies))
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: proxies
+          path: sub.txt
+
+      - name: Send to Telegram
+        if: success()
+        run: |
+          import requests, os
+          token = os.getenv("TELEGRAM_TOKEN")
+          chat_id = os.getenv("TELEGRAM_CHAT_ID")
+          with open("sub.txt", "r") as f:
+              text = f.read()[:4000]  # حداکثر محدودیت تلگرام
+          requests.post(f"https://api.telegram.org/bot{token}/sendMessage", data={"chat_id": chat_id, "text": text})
