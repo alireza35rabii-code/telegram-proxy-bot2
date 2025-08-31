@@ -1,0 +1,34 @@
+name: Telegram Proxy Collector
+
+on:
+  schedule:
+    - cron: "0 */12 * * *"   # هر 12 ساعت اجرا می‌شود — می‌تونی تغییرش بدی
+  workflow_dispatch:         # امکان اجرا دستی از Actions
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests[socks]
+
+      - name: Run proxy collector
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID:   ${{ secrets.CHAT_ID }}
+        run: python telegram_proxy_bot.py
+
+      - name: Upload working file
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: working-proxies
+          path: working.txt
